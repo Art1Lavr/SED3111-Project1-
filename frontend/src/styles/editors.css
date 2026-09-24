@@ -1,0 +1,70 @@
+/* Quiet surfaces, with color reserved for channels and actions. */
+.lobby-layout { margin: 0; padding: 0; border: 0; min-width: 0; }
+.lobby-main > .start-game { width: auto; min-width: 230px; display: flex; margin: 24px 0 0 auto; }
+.resume-note { margin: -10px 0 24px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.room-settings label { min-height: 52px; }
+.home-main { position: relative; }
+.beat-decoration { opacity: .38; }
+.piano-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: #222328; }
+.piano-toolbar label { display: flex; align-items: center; gap: 7px; color: #b5b6bf; font-size: 11px; }
+.piano-toolbar select { padding: 5px 7px; border-radius: 5px; font-size: 11px; background: #292a31; }
+.piano-toolbar .toolbar-divider { height: 20px; }
+.polyphony-toggle { margin-left: auto; }
+.polyphony-toggle input { accent-color: var(--accent); }
+.guide-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 9px 16px; color: #a5a6ae; background: #202126; font-size: 10px; line-height: 1.6; }
+.ghost-legend { width: 11px; height: 8px; background: #797c8555; border: 1px dashed #9598a0; border-radius: 2px; }
+.guide-warning { color: #cdbb9d; }
+.guide-tuning { margin-left: auto; color: #91939d; font-size: 9px; }
+.piano-scroll { background: #25262b; max-height: 470px; }
+.piano-ruler { background: #292a31; border-bottom-color: #45464f; color: #b1b2bd; }
+.piano-keys > button { background: #b8b9bf; border-bottom-color: #96979e; color: #32333a; }
+.piano-keys > button.black-key { background: #37383f; border-bottom-color: #282930; box-shadow: 7px 0 #a5a6ad; }
+.pitch-band { background: #292a30; border-bottom-color: #33343c; }
+.pitch-band.sharp { background: #24252b; }
+.pitch-band.in-scale { background: #343a49; }
+.pitch-band.sharp.in-scale { background: #303644; }
+.pitch-band.root-note { box-shadow: inset 4px 0 #adb5d6; background: #3b4254; }
+.selection-box { position: absolute; z-index: 5; pointer-events: none; border: 1px solid #bdc6e8; background: #a0b3ce25; }
+.piano-note.selected { box-shadow: inset 0 0 0 1px #d5d8e4; }
+.fill-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 22px; font-size: 11px; }
+.fill-tools > span { color: var(--muted); margin-right: 4px; }
+.fill-tools button { padding: 8px 10px; border: 1px solid #555865; border-radius: 6px; background: #30323c; }
+.fill-tools button:hover:not(:disabled) { background: #414657; }
+.fill-tools small { color: var(--muted); font-size: 10px; }
+.pitch-band.octave { border-bottom-color: #52535e; }
+.beat-line { background: #686a771b; }
+.beat-line.strong { background: #9294a13a; }
+.beat-line.bar-line { background: #b5b7c45c; }
+.piano-note { background: color-mix(in srgb, var(--track-color) 80%, #858791); border-color: #30323b; color: #20222b; box-shadow: none; }
+.piano-note.selected { outline-color: #d5d8e4; }
+.note-resize { width: 40%; max-width: 7px; min-width: 2px; }
+.ghost-note { position: absolute; z-index: 1; height: 15px; min-width: 3px; border: 1px dashed #999ba78c; background: #85899630; border-radius: 2px; color: #bec0cb; font: 8px/13px Consolas, monospace; padding: 0 3px; overflow: hidden; white-space: nowrap; text-align: left; }
+.ghost-note:hover { background: #85899666; border-color: #c1c3cd; }
+.playhead { background: #d1d4e3; box-shadow: none; width: 1px; }
+.large-steps { padding: 26px 22px; min-height: 230px; overflow-x: auto; }
+.steps-label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #d5d6de; margin-bottom: 32px; }
+.steps-label > span { margin-left: auto; color: var(--muted); font-size: 10px; }
+.step-buttons { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 3px; }
+.step-buttons > button { position: relative; height: 20px; padding: 0; border-radius: 3px; border: 1px solid #4a4b55; background: linear-gradient(#3b3c45, #303139); }
+.step-buttons > button:nth-child(4n) { margin-right: 3px; }
+.step-buttons > button.alternate { background: linear-gradient(#51494e, #403b42); border-color: #61545c; }
+.step-buttons > button.on { background: color-mix(in srgb, var(--track-color) 75%, #626470); border-color: var(--track-color); }
+.step-buttons > button.at-playhead { outline: 1px solid #eef0fa; outline-offset: 1px; }
+.step-buttons > button:disabled { opacity: .65; }
+.drum-sequencer { min-width: 630px; }
+.drum-ruler { display: grid; grid-template-columns: repeat(8, 1fr); font: 9px Consolas, monospace; color: var(--muted); margin-bottom: 12px; }
+.drum-sequencer .step-buttons { gap: 4px; }
+.drum-sequencer .step-buttons > button { height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 7px 0; box-shadow: inset 0 1px 0 #ffffff10, 0 2px 1px #0005; }
+.drum-sequencer .step-buttons > button i { width: 3px; height: 10px; background: #ffffff15; border-radius: 1px; }
+.drum-sequencer .step-buttons > button.on i { background: #ffffff70; }
+.drum-sequencer .step-buttons > button span { font: 8px Consolas, monospace; color: #c4c4d0; }
+.drum-sequencer .step-buttons > button.on span { color: #242631; }
+.drum-sequencer > p { margin-top: 22px; }
+@media (max-width: 720px) {
+  .piano-toolbar { gap: 10px; padding: 10px; }
+  .piano-toolbar .toolbar-divider { display: none; }
+  .polyphony-toggle { margin-left: 0; }
+  .guide-caption { padding: 8px 10px; }
+  .guide-tuning { margin-left: 0; }
+  .lobby-main > .start-game { width: 100%; }
+}
