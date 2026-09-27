@@ -1,0 +1,22 @@
+﻿Current sample library
+
+All 19 active audio files were supplied by the project team:
+- kick/: 3 WAV one-shots
+- hat/: 2 WAV one-shots
+- snare/: 4 WAV one-shots
+- clap/: 3 WAV one-shots
+- bass/: 808_hiroshima.wav, 808_low.wav, 808_mira_long.wav
+- instrument/: keyboard (MP3), saxophone, flute and guitar (WAV)
+
+Original authors, source URLs and redistribution licenses have not yet been
+provided for these team-supplied files. This notice does not assign a license.
+
+Playback changes: gain, relative pitch shifts and short fades; bass note-length
+envelope and optional Cut itself. Original audio files are not modified.
+
+Earlier prototype versions used six CC BY 3.0 recordings from
+https://github.com/nbrosowsky/tonejs-instruments (Nicholaus P. Brosowsky and
+contributors; original bass: Karoryfer; piano: VSO2 / Versilian Studios).
+Those files are no longer used by the current catalogue. The retained
+sample-source-info.txt belongs to that earlier collection, not to the current
+team-supplied files.
