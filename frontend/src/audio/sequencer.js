@@ -1,7 +1,7 @@
 import { MIN_NOTE, STEPS, stepSeconds } from '../game/model.js'
 
 // The JS timer looks ahead; the audio clock determines when notes actually sound.
-export function startSequence(engine, getTracks, bpm, { loop = true, startPosition = 0, durationSeconds, onProgress, onPosition, onEnd, onError, scheduler = globalThis } = {}) {
+export function startSequence(engine, getTracks, bpm, { loop = true, startPosition = 0, durationSeconds, onProgress, onPosition, onEnd, onError, metronome = () => false, scheduler = globalThis } = {}) {
   const stepDuration = stepSeconds(bpm)
   const tickDuration = stepDuration * MIN_NOTE
   const ticksPerLoop = STEPS / MIN_NOTE
@@ -9,6 +9,7 @@ export function startSequence(engine, getTracks, bpm, { loop = true, startPositi
   const startTime = engine.clock() + 0.08 - startPosition * stepDuration
   let step = Math.ceil(startPosition / MIN_NOTE)
   let stopped = false
+  let initial = true
   let frame, timer
   function stop() {
     if (stopped) return
@@ -23,9 +24,25 @@ export function startSequence(engine, getTracks, bpm, { loop = true, startPositi
     // Do not burst a backlog of notes if the browser tab was suspended.
     step = Math.max(step, Math.floor(Math.max(0, current - startTime) / tickDuration))
     try {
+      if (initial) {
+        initial = false
+        if (startPosition > 0) for (const track of getTracks()) {
+          if (track.muted) continue
+          for (const note of [...track.notes].sort((a, b) => a.start - b.start)) {
+            if (note.start >= startPosition || note.start + note.length <= startPosition) continue
+            engine.schedule(track.instrumentId, track.sampleId, {
+              time: startTime + startPosition * stepDuration, channelId: track.id, volume: track.volume,
+              semitones: note.pitch + track.transpose, pitched: true, monophonic: track.cutSelf,
+              offsetSeconds: (startPosition - note.start) * stepDuration,
+              noteDuration: (note.start + note.length - startPosition) * stepDuration,
+            })
+          }
+        }
+      }
       while (step * tickDuration < duration && startTime + step * tickDuration < current + 0.12) {
         const position = (step % ticksPerLoop) * MIN_NOTE
         const time = startTime + step * tickDuration
+        if (position % 2 === 0 && metronome()) engine.click(time, position % 8 === 0)
         for (const track of getTracks()) {
           if (track.muted) continue
           for (const note of track.notes.filter((note) => note.start === position)) {

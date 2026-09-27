@@ -22,7 +22,7 @@ export function SoundSettings({ track, locked, onClose, onChange, onPreview, onC
     <label>Volume <span>{Math.round(track.volume * 100)}%</span><input type="range" min="0" max="1" step="0.01" value={track.volume} disabled={locked} onChange={(event) => onChange({ volume: Number(event.target.value) })} /></label>
     <label>Transpose <span>{track.transpose > 0 ? '+' : ''}{track.transpose} semitones</span><input type="range" min="-12" max="12" value={track.transpose} disabled={locked} onChange={(event) => onChange({ transpose: Number(event.target.value) })} /></label>
     <label className="check-setting"><input type="checkbox" checked={track.cutSelf} disabled={locked} onChange={(event) => onChange({ cutSelf: event.target.checked })} /><span>Cut itself<small>Each new note stops the previous one</small></span></label>
-    <div className="settings-readout"><span>RESAMPLE</span><span>TIME: NONE</span><span>LOOP: OFF</span></div>
+    <div className="settings-readout"><span>RESAMPLE</span><span>TIME: NONE</span><span>{getSample(track).sustain ? 'LONG NOTES: SUSTAIN' : 'LOOP: OFF'}</span></div>
     <button className="button secondary" disabled={locked} onClick={onChooseSound}>Change sound<Icon name="arrow" size={16} /></button>
   </div></Modal>
 }

@@ -18,6 +18,7 @@ function fixture() {
   class Buffer extends Node {
     duration = 4
     constructor() { super(); buffers.push(this) }
+    fromArray(samples) { this.samples = samples; return this }
     async load(url) {
       this.url = url
       if (failNextLoad) { failNextLoad = false; throw new Error('Missing sample') }
@@ -32,6 +33,37 @@ function fixture() {
   const engine = createAudioEngine({ audio, baseUrl: '/' })
   return { engine, sources, buffers, deferResume(fn) { resume = fn }, failLoad() { failNextLoad = true } }
 }
+
+test('Stopping a pattern preview cancels its future notes without cutting the song', async () => {
+  const { engine, sources } = fixture()
+  await engine.start()
+  engine.schedule('melody', 'keyboard', { channelId: 'song', time: 10 })
+  engine.schedule('melody', 'keyboard', { channelId: 'preview', time: 10 })
+  engine.schedule('melody', 'keyboard', { channelId: 'preview', time: 12 })
+  engine.stopChannel('preview')
+  assert.deepEqual(sources[0].stops, [])
+  assert.deepEqual(sources[1].stops, [10])
+  assert.equal(sources[2].disposed, true)
+  engine.dispose()
+})
+
+test('Instruments overlap by default; a short sax sample sustains for the drawn duration', async () => {
+  const { engine, sources, buffers } = fixture()
+  await engine.start()
+  const sax = buffers.find((buffer) => buffer.url.includes('sax-short'))
+  sax.duration = 0.369
+  engine.schedule('melody', 'sax', { noteDuration: 2 })
+  engine.schedule('melody', 'sax', { noteDuration: 1, semitones: 7 })
+  assert.deepEqual(sources[0].stops, [])
+  assert.equal(sources[0].loop, true)
+  assert.equal(sources[0].started.duration + sources[0].fadeOut, 2)
+  assert.equal(sources[1].started.duration + sources[1].fadeOut, 1)
+  engine.schedule('melody', 'sax', { noteDuration: 0.125 })
+  assert.equal(sources[2].loop, false)
+  engine.schedule('melody', 'sax', { noteDuration: 1, offsetSeconds: 1 })
+  assert.ok(sources[3].started.offset >= 0.08 && sources[3].started.offset < 0.24)
+  engine.dispose()
+})
 
 test('Cut itself cuts older bass voices across sample changes, leaving drums playing', async () => {
   const { engine, sources } = fixture()
@@ -112,15 +144,15 @@ test('All four instruments use short notes regardless of file length, pitch or b
   engine.dispose()
 })
 
-test('A new instrument note cuts the previous note across pitches and samples, not bass or drums', async () => {
+test('Explicit Cut itself cuts melodic voices on the same channel', async () => {
   const { engine, sources } = fixture()
   await engine.start()
   await engine.play('bass', 'bass-low')
   await engine.play('kick', 'kick-learn')
   await engine.play('melody', 'keyboard')
-  await engine.play('melody', 'keyboard', { semitones: 7, cutItself: false })
+  await engine.play('melody', 'keyboard', { semitones: 7, monophonic: true })
   assert.deepEqual(sources[2].stops, [10])
-  await engine.play('melody', 'flute')
+  await engine.play('melody', 'flute', { monophonic: true })
   assert.deepEqual(sources[3].stops, [10])
   assert.deepEqual(sources[0].stops, [])
   assert.deepEqual(sources[1].stops, [])
@@ -163,10 +195,26 @@ test('Sequencer honours drawn note lengths and Cut itself remains independent pe
   assert.equal(sources[0].started.duration + sources[0].fadeOut, 1)
   engine.schedule('melody', 'flute', { channelId: 'track-b', time: 11, noteDuration: 0.5 })
   assert.deepEqual(sources[0].stops, [])
-  engine.schedule('melody', 'keyboard', { channelId: 'track-a', time: 11.5, noteDuration: 0.25 })
+  engine.schedule('melody', 'keyboard', { channelId: 'track-a', time: 11.5, noteDuration: 0.25, monophonic: true })
   assert.deepEqual(sources[0].stops, [11.5])
   assert.deepEqual(sources[1].stops, [])
   engine.stop()
   assert.ok(sources.every((source) => source.disposed), 'Stop must cancel future scheduled audio too')
   engine.dispose()
+})
+
+test('Metronome clicks use the master output and stop/dispose with notes', async () => {
+  const { engine, sources, buffers } = fixture()
+  await engine.start()
+  engine.click(10, true); engine.click(10.5, false)
+  assert.equal(sources.length, 2)
+  assert.equal(sources[0].started.time, 10)
+  assert.ok(sources[0].started.gain > sources[1].started.gain)
+  const clicks = buffers.filter(b => b.samples)
+  assert.equal(clicks.length, 2)
+  assert.ok(clicks.every(b => b.samples.every(Number.isFinite)))
+  engine.stop()
+  assert.equal(sources[1].disposed, true)
+  engine.dispose()
+  assert.ok(clicks.every(b => b.disposed))
 })

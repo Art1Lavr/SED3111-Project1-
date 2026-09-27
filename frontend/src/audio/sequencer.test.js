@@ -30,6 +30,14 @@ test('Resuming starts at the paused position instead of replaying the first note
   stop()
 })
 
+test('Seeking into a held note schedules the remaining duration with a sample offset', () => {
+  const setup = fixture()
+  const stop = startSequence(setup.engine, () => [track], 120, { startPosition: 1, scheduler: setup.scheduler })
+  assert.equal(setup.events[0][2].offsetSeconds, 0.25)
+  assert.equal(setup.events[0][2].noteDuration, 0.25)
+  stop()
+})
+
 test('Listen pass schedules notes on the audio clock and finishes after one complete loop', () => {
   const setup = fixture()
   let ended = 0
@@ -88,4 +96,22 @@ test('Configured listening repeats across loops and ends at the same duration at
     setup.advance(20)
     assert.equal(ended, 1)
   }
+})
+
+test('Metronome follows quarter notes, accents bars, toggles live and stops with playback', () => {
+  const setup = fixture(), clicks = []
+  setup.engine.click = (time, accent) => clicks.push({ time, accent })
+  let enabled = true
+  const stop = startSequence(setup.engine, () => [], 120, { scheduler: setup.scheduler, metronome: () => enabled })
+  assert.equal(clicks[0].time, .08)
+  assert.equal(clicks[0].accent, true)
+  for (let i = 1; i <= 20; i++) setup.advance(i / 10)
+  assert.deepEqual(clicks.map(c => c.accent), [true, false, false, false, true])
+  for (let i = 1; i < clicks.length; i++) assert.ok(Math.abs(clicks[i].time - clicks[i - 1].time - .5) < 1e-8)
+  enabled = false; setup.advance(2.5)
+  assert.equal(clicks.length, 5)
+  enabled = true; setup.advance(3)
+  assert.equal(clicks.length, 6)
+  stop(); setup.advance(3.5)
+  assert.equal(clicks.length, 6)
 })

@@ -3,7 +3,7 @@ import { instruments } from '../audio/instruments.js'
 export const STEPS = 16
 export const MIN_NOTE = 0.125 // One sixty-fourth note; internal units are eighth notes.
 export const DRUM_STEPS = 32
-export const PLAYER_COLORS = ['#b4b9dc', '#b8a6ce', '#ccb28c', '#98b9c9', '#c7a2b5']
+export const PLAYER_COLORS = ['#ff9b73', '#7fd0bd', '#edcd79', '#9cbcf0', '#ef9eae']
 export const PITCHES = Array.from({ length: 25 }, (_, index) => 12 - index)
 export const uid = () => crypto.randomUUID()
 export const stepSeconds = (bpm) => 30 / bpm
@@ -19,8 +19,8 @@ export function createTrack(instrumentId, ownerId, sampleId) {
   const instrument = getInstrument(instrumentId)
   return {
     id: uid(), instrumentId, ownerId, sampleId: sampleId ?? instrument.samples[0].id,
-    volume: 0.75, muted: false, mode: instrument.pitched ? 'piano' : 'steps',
-    cutSelf: !!instrument.pitched, transpose: 0, notes: [],
+    volume: 0.75, muted: false, solo: false, mode: instrument.pitched ? 'piano' : 'steps',
+    cutSelf: instrumentId === 'bass', transpose: 0, notes: [],
   }
 }
 
@@ -28,10 +28,16 @@ export function initialTracks(ownerId) {
   return ['melody', 'bass', 'kick', 'hat', 'snare', 'clap'].map((id) => createTrack(id, ownerId))
 }
 
-export function constrainNote(note) {
+export function constrainNote(note, mode = 'standard') {
   const quantize = (value) => Math.round(value / MIN_NOTE) * MIN_NOTE
   const start = Math.max(0, Math.min(STEPS - MIN_NOTE, quantize(Number(note.start) || 0)))
-  return { ...note, start, length: Math.max(MIN_NOTE, Math.min(STEPS - start, quantize(Number(note.length) || MIN_NOTE))), pitch: Math.max(-12, Math.min(12, Math.round(Number(note.pitch) || 0))) }
+  const pitch = Math.max(-12, Math.min(12, Math.round(Number(note.pitch) || 0)))
+  const pentatonic = Array.from({ length: 25 }, (_, index) => index - 12)
+    .filter((candidate) => [0, 2, 4, 7, 9].includes((candidate % 12 + 12) % 12))
+  const snappedPitch = mode === 'beginner'
+    ? pentatonic.reduce((closest, candidate) => Math.abs(candidate - pitch) < Math.abs(closest - pitch) ? candidate : closest)
+    : pitch
+  return { ...note, start, length: Math.max(MIN_NOTE, Math.min(STEPS - start, quantize(Number(note.length) || MIN_NOTE))), pitch: snappedPitch }
 }
 
 export function toggleStep(notes, start) {
@@ -42,7 +48,7 @@ export function toggleStep(notes, start) {
 export function createGame(room, now = Date.now()) {
   return {
     players: room.players.map((player) => ({ ...player })), tracks: initialTracks(room.players[0].id),
-    code: room.code, bpm: room.bpm, root: room.root ?? 0, scale: room.scale ?? 'major', turnSeconds: room.turnSeconds, listenSeconds: room.listenSeconds ?? 8, current: 0, phase: 'edit',
+    mode: 'standard', code: room.code, bpm: room.bpm, root: room.root ?? 0, scale: room.scale ?? 'major', turnSeconds: room.turnSeconds, listenSeconds: room.listenSeconds ?? 8, current: 0, phase: 'edit',
     deadline: now + room.turnSeconds * 1000, history: [],
   }
 }
@@ -62,8 +68,14 @@ export function beginTurn(game, now = Date.now()) {
 export function updateTrack(game, trackId, update) {
   if (game.phase !== 'edit') return game
   if (!game.tracks.some((track) => track.id === trackId)) return game
+  if (update.notes && game.mode === 'beginner') update = { ...update, notes: update.notes.map(note => constrainNote(note, game.mode)) }
   return {
     ...game, history: [...game.history.slice(-39), game.tracks],
     tracks: game.tracks.map((track) => track.id === trackId ? { ...track, ...update } : track),
   }
+}
+
+export function audibleTracks(tracks, useSolo = true) {
+  const solo = useSolo && tracks.some(t => t.solo)
+  return tracks.filter(t => !t.muted && (!solo || t.solo))
 }

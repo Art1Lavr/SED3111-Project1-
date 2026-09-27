@@ -4,6 +4,10 @@ import { beginTurn, constrainNote, createGame, finishTurn, loopSeconds, toggleSt
 
 const room = { players: [{ id: 'a', name: 'Alex' }, { id: 'b', name: 'Sam' }, { id: 'c', name: 'Max' }], bpm: 120, turnSeconds: 30 }
 
+test('Only bass defaults to Cut itself', () => {
+  for (const track of createGame(room).tracks) assert.equal(track.cutSelf, track.instrumentId === 'bass')
+})
+
 test('Full game shares contributions across players, listens before starting the next timer, and reveals', () => {
   let game = createGame(room, 1000)
   assert.equal(game.deadline, 31000)

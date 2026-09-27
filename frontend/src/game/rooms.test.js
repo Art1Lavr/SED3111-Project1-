@@ -22,3 +22,12 @@ test('Stored rooms validate players and migrate older settings', () => {
   assert.equal(room.turnSeconds, 30)
   assert.equal(room.listenSeconds, 8)
 })
+
+test('Any key and mood survive storage normalization and starting a game', () => {
+  for (const [root, scale] of [['any', 'major'], [11, 'any'], ['any', 'any']]) {
+    const room = normalizeRoom(JSON.parse(JSON.stringify({ code: 'ABC234', players: [{ id: 'a', name: 'Alex' }], root, scale })))
+    const game = createGame(room, 1000)
+    assert.equal(game.root, root)
+    assert.equal(game.scale, scale)
+  }
+})

@@ -9,3 +9,9 @@ test('B natural minor highlights B, C sharp, D, E, F sharp, G and A in every oct
 test('C major highlights its seven natural notes', () => {
   for (let pitch = 0; pitch < 12; pitch++) assert.equal(inScale(pitch, 0, 'major'), [0, 2, 4, 5, 7, 9, 11].includes(pitch))
 })
+
+test('Any key or scale disables every scale highlight', () => {
+  for (const [root, scale] of [['any', 'major'], [0, 'any'], ['any', 'any']]) {
+    for (let pitch = -12; pitch <= 12; pitch++) assert.equal(inScale(pitch, root, scale), false)
+  }
+})
