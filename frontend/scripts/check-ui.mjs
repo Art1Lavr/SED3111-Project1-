@@ -12,14 +12,14 @@ dom.window.addEventListener('error', (event) => errors.push(event.error))
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true }
 dom.window.HTMLElement.prototype.setPointerCapture = () => {}
-let frameId = 0, frames = new Map(), audioTime = 0, route, navigate
+let frameId = 0, frames = new Map(), audioTime = 0, scheduledVoices = 0, route, navigate
 const requestFrame = (callback) => { frames.set(++frameId, callback); return frameId }
 const cancelFrame = (id) => frames.delete(id)
 globalThis.requestAnimationFrame = dom.window.requestAnimationFrame = requestFrame
 globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame = cancelFrame
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 let root
-const audio = { start: async () => {}, stop() {}, dispose() {}, setVolume() {}, setChannelVolume() {}, play: async () => {}, clock: () => audioTime, schedule() {} }
+const audio = { start: async () => {}, stop() {}, stopChannel() {}, dispose() {}, setVolume() {}, setChannelVolume() {}, play: async () => {}, clock: () => audioTime, schedule() { scheduledVoices++ } }
 const engineFactory = () => audio
 function Probe() { const location = useLocation(); const go = useNavigate(); useEffect(() => { route = location.pathname; navigate = go }, [location.pathname, go]); return null }
 const h = React.createElement
@@ -60,6 +60,8 @@ try {
   assert.equal(stored.turnSeconds, 300)
   assert.equal(stored.listenSeconds, 15)
   await click(button('Start session')); await pump()
+  assert.match(document.body.textContent, /Choose your difficulty/)
+  await click([...document.querySelectorAll('.difficulty-option')].find((option) => option.textContent.includes('Standard Mode'))); await pump()
   assert.equal(route, `/studio/${code}`)
   assert.equal(document.querySelectorAll('.track-card').length, 6)
   assert.match(document.querySelector('.queue-footer').textContent, /5:00/)
@@ -197,9 +199,93 @@ try {
   assert.equal(route, lobbyPath, 'Reloaded editor returns safely to lobby')
   await mount(App, '/lobby/INVALID')
   assert.equal(route, '/')
+  const beginnerRoom = JSON.parse(localStorage.getItem(`pass-the-beat:room:${code}`))
+  beginnerRoom.turnSeconds = 60
+  beginnerRoom.turnSecondsCustom = false
+  localStorage.setItem(`pass-the-beat:room:${code}`, JSON.stringify(beginnerRoom))
+  await mount(App, lobbyPath)
+  await click(button('Start session')); await pump()
+  await click([...document.querySelectorAll('.difficulty-option')].find((option) => option.textContent.includes('Beginner Mode'))); await pump()
+  assert.match(document.querySelector('.beginner-mode-badge').textContent, /BEGINNER MODE/)
+  assert.match(document.querySelector('.beginner-mode-banner').textContent, /Build with the grid or add a ready-made segment/)
+  assert.equal(document.querySelectorAll('.beginner-category-list button').length, 7)
+  assert.ok(document.querySelector('.beginner-add-instrument-toggle'))
+  assert.equal(document.querySelectorAll('.beginner-channel-item').length, 6)
+  assert.equal(document.querySelector('.knob-control'), null)
+  assert.equal(document.querySelector('[aria-label^="Configure "]'), null)
+  assert.match(document.querySelector('.beginner-turn-prompt').textContent, /Alex: Add your melodic loop above the beat!/)
+  assert.equal(document.querySelector('.turn-seconds').textContent, '2:00')
+  const starterToggle = document.querySelector('.starter-beat-control input')
+  assert.equal(starterToggle.checked, true, 'Starter rhythm is enabled by default')
+  const soloKick = document.querySelector('[aria-label="Solo Kick"]')
+  const muteKick = document.querySelector('[aria-label="Mute Kick"]')
+  assert.ok(soloKick && muteKick, 'Mute and solo controls are available in channel headers')
+  await click(soloKick); await pump()
+  assert.equal(soloKick.getAttribute('aria-pressed'), 'true')
+  await click(muteKick); await pump()
+  assert.equal(soloKick.getAttribute('aria-pressed'), 'true', 'Mute and solo are independent toggles')
+  await click(document.querySelector('[aria-label="Unmute Kick"]')); await pump()
+  audioTime = 0
+  await click(document.querySelector('.transport-play')); await pump()
+  assert.ok([...document.querySelectorAll('.beginner-channel-item')].find((item) => item.textContent.includes('Kick')).classList.contains('sound-active'), 'A kick onset pulses its channel header')
+  await click(document.querySelector('[aria-label="Stop"]')); await pump()
+  await click(document.querySelector('[aria-label="Unsolo Kick"]')); await pump()
+  await click(starterToggle); await pump()
+  assert.equal(starterToggle.checked, false)
+  assert.match(document.querySelector('.starter-beat-control').textContent, /Off/)
+  await click(starterToggle); await pump()
+  assert.equal(starterToggle.checked, true, 'Starter rhythm can be restored during the turn')
+  assert.deepEqual([...document.querySelectorAll('.beginner-category-list button strong')].map((button) => button.textContent), ['PIANO & KEYS', 'SYNTHS & LEADS', 'BASSLINES', 'STRINGS & PADS', 'DRUM BEATS', 'BRASS & HORNS', 'VOCAL FX'])
+  assert.equal(document.querySelectorAll('.melody-pattern-card').length, 8)
+  assert.ok(document.querySelector('.piano-editor'), 'Beginner keeps the interactive piano roll visible')
+  const pianoGrid = document.querySelector('.note-grid')
+  pianoGrid.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 425 })
+  await act(async () => pianoGrid.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 50, clientY: 119 })))
+  assert.match(document.querySelector('.piano-note').getAttribute('aria-label'), /^E5,/, 'Manual off-scale notes snap to C major pentatonic')
+  assert.match(pianoGrid.getAttribute('aria-label'), /C major pentatonic/)
+  const firstCard = document.querySelector('.melody-pattern-card')
+  assert.match(firstCard.querySelector('h5').textContent, /Piano — Classic Ballad/)
+  assert.ok(firstCard.querySelector('.melody-vibe-tag').textContent)
+  assert.ok(firstCard.textContent.includes('Classic Ballad'))
+  assert.match(firstCard.querySelector('.preview-pattern-button').textContent, /Preview/)
+  assert.match(firstCard.querySelector('.button.primary').textContent, /Add to Track/)
+  const previousScheduledVoices = scheduledVoices
+  for (const categoryName of ['BRASS & HORNS', 'VOCAL FX']) {
+    await click([...document.querySelectorAll('.beginner-category-list button')].find((item) => item.textContent.includes(categoryName))); await pump()
+    assert.equal(document.querySelectorAll('.melody-pattern-card').length, 8)
+  }
+  await click([...document.querySelectorAll('.beginner-category-list button')].find((item) => item.textContent.includes('DRUM BEATS'))); await pump()
+  assert.equal(document.querySelectorAll('.melody-pattern-card').length, 8)
+  assert.equal(document.querySelector('.melody-pattern-card h5').textContent.includes('Piano'), false, 'The right panel filters to the chosen category')
+  await click(document.querySelector('.melody-pattern-card .preview-pattern-button'))
+  assert.ok(scheduledVoices - previousScheduledVoices > 8, 'Drum preview schedules the multi-instrument groove')
+  const drumCard = [...document.querySelectorAll('.melody-pattern-card')].find((card) => card.textContent.includes('Lo-Fi Chill Beat'))
+  await click(drumCard.querySelector('.button.primary')); await pump()
+  assert.match(drumCard.textContent, /Selected/)
+  assert.equal(document.querySelectorAll('.beginner-channel-item').length, 9, 'Drum segment adds three active channels')
+  assert.equal(document.querySelector('.listen-banner'), null, 'Adding a sequence does not finish the turn')
+  await click([...document.querySelectorAll('.beginner-category-list button')].find((item) => item.textContent.includes('BASSLINES'))); await pump()
+  const bassCard = [...document.querySelectorAll('.melody-pattern-card')].find((card) => card.textContent.includes('Deep Sub Pulse'))
+  await click(bassCard.querySelector('.button.primary')); await pump()
+  await click([...document.querySelectorAll('.beginner-category-list button')].find((item) => item.textContent.includes('PIANO & KEYS'))); await pump()
+  const balladCard = [...document.querySelectorAll('.melody-pattern-card')].find((card) => card.textContent.includes('Classic Ballad'))
+  await click(balladCard.querySelector('.button.primary')); await pump()
+  assert.equal(document.querySelectorAll('.beginner-channel-item').length, 11)
+  assert.match(document.querySelector('.queue-heading').textContent, /Creating now: Alex/)
+  const [minutes, seconds] = document.querySelector('.turn-seconds').textContent.split(':').map(Number)
+  assert.ok(minutes * 60 + seconds > 100, 'Adding and removing loops preserves the two-minute timer')
+  assert.match(document.querySelector('.preset-success-toast').textContent, /Classic Ballad added to the shared song/)
+  await click(document.querySelector('[aria-label="Remove Lo-Fi Chill Beat"]')); await pump()
+  assert.equal(document.querySelectorAll('.beginner-channel-item').length, 8, 'Removing the drum segment removes all its channels')
+  assert.equal(document.querySelector('.listen-banner'), null)
+  await click(button('Pass the beat')); await pump()
+  assert.match(document.querySelector('.listen-banner').textContent, /Player 2, listen/, 'Manual pass advances to the next player')
+  const tracksAfterPass = document.querySelectorAll('.beginner-channel-item').length
+  await act(async () => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ctrlKey: true, code: 'KeyZ', key: 'z' })))
+  assert.equal(document.querySelectorAll('.beginner-channel-item').length, tracksAfterPass, 'Undo cannot change saved tracks during another player turn')
   assert.doesNotMatch(document.body.textContent, /[А-Яа-яЁё]/)
   assert.deepEqual(errors, [], 'No DOM or React event errors')
-  console.log('UI checks passed: routing, persisted lobby settings, fine notes, scale highlighting, group selection, quick fills, mode switching, pause/resume, timed listening, result and reload guards.')
+  console.log('UI checks passed: difficulty selection, beginner pitch lock and simplified controls, standard editing, routing, lobby settings, playback, timed turns and results.')
 } finally {
   if (root) await act(async () => root.unmount())
   await server.close()

@@ -2,10 +2,10 @@ import { DRUM_STEPS, toggleStep } from '../game/model'
 import { fillSteps } from '../game/editing'
 import useRightErase from '../hooks/useRightErase'
 
-export default function StepSequencer({ track, locked, playhead, playing, onChange, onSelect, onPreview, expanded = false }) {
+export default function StepSequencer({ track, locked, playhead, playing, onChange, onSelect, onPreview, expanded = false, isBeginner = false }) {
   const erase = useRightErase(track.notes, onChange, locked)
-  return <div className={expanded ? 'drum-sequencer' : 'step-row'} onContextMenu={(event) => event.preventDefault()}>
-    {expanded && <div className="fill-tools"><span>Quick fill</span>{[1, 2, 4, 8].map((every) => <button key={every} disabled={locked} onClick={() => onChange(fillSteps(every))}>Every {every} {every === 1 ? 'step' : 'steps'}</button>)}<small>Replaces this pattern · Undo to restore</small></div>}
+  return <div className={`${expanded ? 'drum-sequencer' : 'step-row'} ${isBeginner ? 'beginner-step-sequencer' : ''}`} aria-label={isBeginner ? 'Interactive two-bar drum grid' : undefined} onContextMenu={(event) => event.preventDefault()}>
+    {expanded && !isBeginner && <div className="fill-tools"><span>Quick fill</span>{[1, 2, 4, 8].map((every) => <button key={every} disabled={locked} onClick={() => onChange(fillSteps(every))}>Every {every} {every === 1 ? 'step' : 'steps'}</button>)}<small>Replaces this pattern · Undo to restore</small></div>}
     {expanded && <div className="drum-ruler">{Array.from({ length: 8 }, (_, i) => <span key={i}>BAR {Math.floor(i / 4) + 1} · {i % 4 + 1}</span>)}</div>}
     <div className="step-buttons">{Array.from({ length: DRUM_STEPS }, (_, index) => {
       const start = index / 2
@@ -21,6 +21,6 @@ export default function StepSequencer({ track, locked, playhead, playing, onChan
           if (!active) onPreview?.()
         }}>{expanded && <><i /><span>{index % 4 + 1}</span></>}</button>
     })}</div>
-    {expanded && <p className="small-note">32 sixteenth-note steps · 2 bars. Switch to Piano roll for pitch and note length.</p>}
+    {expanded && <p className="small-note">{isBeginner ? 'Click a step to add or remove a beat.' : '32 sixteenth-note steps · 2 bars. Switch to Piano roll for pitch and note length.'}</p>}
   </div>
 }

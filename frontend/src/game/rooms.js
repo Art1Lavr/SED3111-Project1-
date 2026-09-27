@@ -8,6 +8,7 @@ export function normalizeRoom(value) {
   return { ...value, bpm: Math.max(60, Math.min(180, Number(value.bpm) || 120)),
     root: Number.isInteger(value.root) && value.root >= 0 && value.root < 12 ? value.root : 0,
     scale: value.scale === 'minor' ? 'minor' : 'major',
+    turnSecondsCustom: value.turnSecondsCustom === true,
     turnSeconds: TURN_LENGTHS.includes(value.turnSeconds) ? value.turnSeconds : 30,
     listenSeconds: LISTEN_LENGTHS.includes(value.listenSeconds) ? value.listenSeconds : 8 }
 }

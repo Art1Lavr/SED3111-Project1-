@@ -61,6 +61,19 @@ test('Loop uses live edited patterns, skips muted tracks, and stops scheduling w
   assert.equal(setup.events.length, 2)
 })
 
+test('Solo isolates soloed tracks without changing other tracks mute state', () => {
+  const setup = fixture()
+  const tracks = [
+    { ...track, id: 'melody-track', notes: [{ start: 0, length: 1, pitch: 0 }] },
+    { ...track, id: 'bass-track', instrumentId: 'bass', sampleId: 'bass-low', solo: true, notes: [{ start: 0, length: 1, pitch: 0 }] },
+  ]
+  startSequence(setup.engine, () => tracks, 120, { scheduler: setup.scheduler })
+  assert.equal(setup.events.length, 1)
+  assert.equal(setup.events[0][2].channelId, 'bass-track')
+  assert.equal(tracks[0].muted, false)
+  assert.equal(tracks[0].solo, undefined)
+})
+
 test('A sixty-fourth note is scheduled at its exact fractional position and duration', () => {
   const setup = fixture()
   const short = { ...track, notes: [{ start: 0.125, length: 0.125, pitch: 2 }] }

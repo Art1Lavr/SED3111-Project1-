@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import usePlayback from './hooks/usePlayback'
-import { beginTurn, constrainNote, createGame, createTrack, finishTurn, getInstrument, uid, updateTrack } from './game/model'
+import { addMelodyPreset, beginTurn, createGame, createTrack, finishTurn, getInstrument, MELODY_PRESETS, removeAddedMelodyPreset, setStarterBeat, stepSeconds, uid, updateTrack } from './game/model'
 import Icon from './components/Icon'
 import Modal from './components/Modal'
 import Home from './pages/HomePage'
@@ -19,6 +19,7 @@ export default function App({ engineFactory } = {}) {
   const routeCode = location.pathname.split('/')[2]
   const setScreen = useCallback((next) => navigate(next === 'home' ? '/' : `/${next}/${routeCode}`), [navigate, routeCode])
   const [form, setForm] = useState(null)
+  const [difficultyOpen, setDifficultyOpen] = useState(false)
   const [name, setName] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [roomState, setRoom] = useState(() => readRoom(routeCode))
@@ -34,8 +35,10 @@ export default function App({ engineFactory } = {}) {
   const [remaining, setRemaining] = useState(30)
   const [masterVolume, setMasterVolume] = useState(65)
   const [confirmExit, setConfirmExit] = useState(false)
+  const [presetAdded, setPresetAdded] = useState('')
   const { audio, gameRef, prepareAudio, stop, pause, play, playing, playhead, listenProgress } = usePlayback(game, setError, engineFactory)
   const starting = useRef(false)
+  const presetAddedTimer = useRef(null)
   const phase = game?.phase
   const currentPlayer = game?.current
   const deadline = game?.deadline
@@ -49,7 +52,7 @@ export default function App({ engineFactory } = {}) {
     previousPath.current = location.pathname
     stop()
     const frame = requestAnimationFrame(() => {
-    setForm(null); setPicker(null); setSettings(null); setContext(null); setConfirmExit(false)
+    setForm(null); setDifficultyOpen(false); setPicker(null); setSettings(null); setContext(null); setConfirmExit(false)
     if (wasStudio && screen !== 'studio') {
       setGame((previous) => previous?.phase === 'edit' && previous.deadline ? { ...previous, pausedSeconds: Math.max(0, (previous.deadline - Date.now()) / 1000), deadline: null } : previous)
     } else if (screen === 'studio') {
@@ -93,8 +96,10 @@ export default function App({ engineFactory } = {}) {
   }, [context])
 
   const undo = useCallback(() => {
-    setGame((previous) => previous?.phase === 'edit' && previous.history.length ? { ...previous, tracks: previous.history.at(-1), history: previous.history.slice(0, -1) } : previous)
-  }, [])
+    setGame((previous) => previous?.phase === 'edit' && previous.current === currentPlayer && previous.historyTurn === previous.current && previous.history.length
+      ? { ...previous, tracks: previous.history.at(-1), history: previous.history.slice(0, -1) }
+      : previous)
+  }, [currentPlayer])
 
   useEffect(() => {
     function handleKey(event) {
@@ -127,7 +132,7 @@ export default function App({ engineFactory } = {}) {
     event.preventDefault()
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     const next = { code: Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => alphabet[n % alphabet.length]).join(''),
-      players: [{ id: uid(), name: name.trim() || 'Player 1' }, { id: uid(), name: 'Player 2' }], bpm: 120, turnSeconds: 60, listenSeconds: 8 }
+      players: [{ id: uid(), name: name.trim() || 'Player 1' }, { id: uid(), name: 'Player 2' }], bpm: 120, turnSeconds: 60, turnSecondsCustom: false, listenSeconds: 8 }
     try { localStorage.setItem(roomKey(next.code), JSON.stringify(next)) }
     catch { setError('Enable browser storage to create a lobby.'); return }
     setRoom(next); setForm(null); navigate(`/lobby/${next.code}`); setError('')
@@ -146,17 +151,21 @@ export default function App({ engineFactory } = {}) {
       setForm(null); navigate(`/lobby/${next.code}`); setError('')
     } catch { setError('Could not open the lobby. Create a new one.') }
   }
-  async function startGame() {
+  function startGame() {
     if (starting.current) return
     if (game?.code === room.code && game.phase !== 'reveal') { setScreen('studio'); return }
     if (room.players.length < 2 || room.players.length > 5 || room.players.some((player) => !player.name.trim())) { setError('Add 2 to 5 players with names.'); return }
+    setError(''); setDifficultyOpen(true)
+  }
+  async function launchGame(mode) {
+    if (starting.current) return
     starting.current = true; setAudioStatus('loading'); setError('')
     const startPath = location.pathname
     try {
       await prepareAudio(); audio.current.setVolume(masterVolume / 100); setAudioStatus('ready')
       if (previousPath.current !== startPath) return
-      const next = createGame(room)
-      setGame(next); setSelectedId(next.tracks[0].id); setRemaining(room.turnSeconds); setScreen('studio')
+      const next = createGame(room, { mode })
+      setGame(next); setSelectedId(next.tracks[0].id); setRemaining(next.turnSeconds); setDifficultyOpen(false); setScreen('studio')
     } catch (cause) { setError(cause.message); setAudioStatus('error') }
     finally { starting.current = false }
   }
@@ -165,7 +174,6 @@ export default function App({ engineFactory } = {}) {
     ?? game?.tracks.find((track) => track.ownerId === game.players[game.current].id) ?? game?.tracks[0]
   const editable = (track) => !!track && game?.phase === 'edit'
   function changeTrack(id, update) {
-    if (update.notes) update = { ...update, notes: update.notes.map(constrainNote) }
     setGame((previous) => updateTrack(previous, id, update))
     if ('volume' in update || 'muted' in update) {
       const track = game.tracks.find((item) => item.id === id)
@@ -178,6 +186,43 @@ export default function App({ engineFactory } = {}) {
       semitones: pitch + track.transpose, channelId: `preview-${track.id}`, volume: track.volume,
       duration: 0.25, pitched: true,
     }) } catch (cause) { setError(cause.message) }
+  }
+  function previewPattern(preset) {
+    if (gameRef.current?.phase === 'listen') return
+    const duration = stepSeconds(game.bpm)
+    const startTime = audio.current.clock() + 0.08
+    try {
+      for (const instrumentId of new Set(MELODY_PRESETS.flatMap((item) => item.patterns.map((part) => part.instrumentId)))) {
+        audio.current.stopChannel(`pattern-preview-${instrumentId}`)
+      }
+      for (const pattern of preset.patterns) {
+        const channelId = `pattern-preview-${pattern.instrumentId}`
+        const track = gameRef.current.tracks.find((item) => item.instrumentId === pattern.instrumentId)
+        for (const [start, pitch, length] of pattern.notes) audio.current.schedule(pattern.instrumentId, pattern.sampleId, {
+          time: startTime + start * duration, channelId, volume: track?.volume ?? 0.75,
+          semitones: pitch + (track?.transpose ?? 0), noteDuration: length * duration,
+          pitched: true, monophonic: false,
+        })
+      }
+    } catch (cause) { setError(cause.message) }
+  }
+  function selectPreset(preset) {
+    if (gameRef.current?.phase !== 'edit') return
+    const previous = gameRef.current
+    const next = addMelodyPreset(previous, preset.id)
+    if (next === previous) return
+    setPresetAdded(`${preset.style} added to the shared song`)
+    clearTimeout(presetAddedTimer.current)
+    presetAddedTimer.current = setTimeout(() => setPresetAdded(''), 2400)
+    for (const instrumentId of new Set(MELODY_PRESETS.flatMap((item) => item.patterns.map((part) => part.instrumentId)))) {
+      audio.current.stopChannel(`pattern-preview-${instrumentId}`)
+    }
+    setGame(next)
+    setSelectedId(next.tracks[previous.tracks.length].id)
+  }
+  function removePreset(instanceId) {
+    gameRef.current?.tracks.filter((track) => track.presetInstanceId === instanceId).forEach((track) => audio.current.stopChannel(track.id))
+    setGame((previous) => removeAddedMelodyPreset(previous, instanceId))
   }
   function chooseSound(instrumentId, sampleId) {
     if (gameRef.current?.phase !== 'edit') { setPicker(null); return }
@@ -194,22 +239,34 @@ export default function App({ engineFactory } = {}) {
     <Routes>
     <Route path="/" element={<Home onCreate={() => { setForm('create'); setError('') }} onJoin={() => { setForm('join'); setError('') }} />} />
     <Route path="/lobby/:code" element={room && room.code === routeCode ? <Lobby room={room} onChange={saveRoom} onBack={() => setScreen('home')} onStart={startGame} loading={audioStatus === 'loading'} resume={game?.code === room.code && game.phase !== 'reveal'} onError={setError} /> : <Navigate to="/" replace />} />
-    <Route path="/studio/:code" element={game?.code === routeCode && selected ? <Studio game={game} selected={selected} selectedId={selected.id} setSelectedId={setSelectedId}
+    <Route path="/studio/:code" element={game?.code === routeCode && selected ? <Studio game={game} isBeginner={game?.mode === 'beginner'} selected={selected} selectedId={selected.id} setSelectedId={setSelectedId}
       playing={playing} playhead={playhead} listenProgress={listenProgress} remaining={remaining} masterVolume={masterVolume}
       onVolume={(value) => { setMasterVolume(value); audio.current.setVolume(value / 100) }}
       onBpm={(bpm) => { stop(); setGame((previous) => ({ ...previous, bpm })) }}
       onPlay={() => playing ? pause() : play()} onStop={stop} onExit={() => setConfirmExit(true)}
       onFinish={() => { stop(); setSelectedId(null); setGame((previous) => finishTurn(previous)) }} editable={editable} changeTrack={changeTrack}
-      preview={preview} setSettings={setSettings} setContext={setContext} onAdd={() => setPicker('add')} onUndo={undo}
+      preview={preview} previewPattern={previewPattern} onSelectPreset={selectPreset} onRemovePreset={removePreset} onStarterBeatChange={(enabled) => setGame((previous) => setStarterBeat(previous, enabled))} setSettings={setSettings} setContext={setContext} onAdd={() => setPicker('add')} onChangeSound={() => setPicker(selected.id)} onUndo={undo}
       onRetryListen={() => { setError(''); play(false, () => setGame((previous) => beginTurn(previous))) }} /> : <Navigate to={room?.code === routeCode ? `/lobby/${routeCode}` : '/'} replace />} />
     <Route path="/result/:code" element={game && game.code === routeCode && game.phase === 'reveal' ? <Result game={game} playing={playing} onPlay={() => playing ? pause() : play()}
       onAgain={() => { stop(); setScreen('lobby'); setGame(null) }} onHome={exit} /> : <Navigate to={room?.code === routeCode ? `/lobby/${routeCode}` : '/'} replace />} />
     <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     {error && !form && <div className="error-toast" role="alert">{error}<button className="icon-button" aria-label="Dismiss message" onClick={() => setError('')}><Icon name="close" size={14} /></button></div>}
+    {presetAdded && <div className="preset-success-toast" role="status" aria-live="polite">✓ {presetAdded}</div>}
     {form && <Modal title={form === 'create' ? 'Create a lobby' : 'Join a lobby'} onClose={() => { setForm(null); setError('') }}>
       {error && <p className="form-error" role="alert">{error}</p>}
       <form className="entry-form" onSubmit={form === 'create' ? createRoom : joinRoom}><label>Your name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={20} placeholder="What should we call you?" required /></label>{form === 'join' && <label>Lobby code<input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} maxLength={6} placeholder="ABC123" required /></label>}<p className="small-note">Local play on one shared device.{form === 'join' ? ' The code works in this browser.' : ''}</p><button className="button primary" type="submit">{form === 'create' ? 'Create lobby' : 'Join a lobby'}<Icon name="arrow" /></button></form>
+    </Modal>}
+    {difficultyOpen && <Modal title="Choose your difficulty" wide onClose={() => { if (!starting.current) setDifficultyOpen(false) }}>
+      <div className="difficulty-options">
+        <button className="difficulty-option" disabled={audioStatus === 'loading'} onClick={() => launchGame('beginner')}>
+          <Icon name="piano" size={21} /><span><strong>Beginner Mode</strong><small>Simple controls with pitches locked to C, D, E, G, and A.</small></span><Icon name="arrow" size={16} />
+        </button>
+        <button className="difficulty-option" disabled={audioStatus === 'loading'} onClick={() => launchGame('standard')}>
+          <Icon name="steps" size={21} /><span><strong>Standard Mode</strong><small>Full sequencer controls and unrestricted pitches.</small></span><Icon name="arrow" size={16} />
+        </button>
+      </div>
+      {audioStatus === 'loading' && <p className="difficulty-loading" role="status">Preparing sounds…</p>}
     </Modal>}
     {picker && <SamplePicker onClose={() => setPicker(null)} onChoose={chooseSound} title={picker === 'add' ? 'Add sound' : 'Change sound'} />}
     {settingsTrack && <SoundSettings track={settingsTrack} locked={!editable(settingsTrack)} onClose={() => setSettings(null)} onChange={(update) => changeTrack(settingsTrack.id, update)} onPreview={() => preview(settingsTrack)} onChooseSound={() => { setSettings(null); setPicker(settingsTrack.id) }} />}

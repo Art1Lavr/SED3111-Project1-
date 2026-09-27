@@ -170,3 +170,15 @@ test('Sequencer honours drawn note lengths and Cut itself remains independent pe
   assert.ok(sources.every((source) => source.disposed), 'Stop must cancel future scheduled audio too')
   engine.dispose()
 })
+
+test('Stopping a preview channel leaves the shared track mix playing', async () => {
+  const { engine, sources } = fixture()
+  await engine.start()
+  engine.schedule('melody', 'keyboard', { channelId: 'track-a', time: 11, noteDuration: 1 })
+  engine.schedule('melody', 'keyboard', { channelId: 'pattern-preview', time: 11, noteDuration: 1 })
+  engine.stopChannel('pattern-preview')
+  assert.deepEqual(sources[0].stops, [])
+  assert.deepEqual(sources[1].stops, [])
+  assert.equal(sources[1].disposed, true)
+  engine.dispose()
+})

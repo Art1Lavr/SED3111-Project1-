@@ -117,6 +117,7 @@ export function createAudioEngine({ audio = browserAudio, baseUrl = import.meta.
       gain?.gain.rampTo(volume, 0.03)
     },
     setChannelVolume(id, value) { channels.get(id)?.gain.rampTo(Math.max(0, Math.min(1, value)), 0.03) },
+    stopChannel(id) { if (ready && !disposed) cutVoices((voice) => voice.channelId === id, audio.now(), true) },
     stop() {
       playbackVersion += 1
       if (!ready || disposed) return

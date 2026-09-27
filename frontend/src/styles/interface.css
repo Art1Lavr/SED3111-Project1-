@@ -59,6 +59,17 @@
 .modal { border: 1px solid #45464a; border-radius: 16px; background: #1e1f23; color: #ebecf0; padding: 25px; width: min(440px, calc(100% - 32px)); max-height: 85svh; box-shadow: 0 24px 90px #0008; }
 .modal::backdrop { background: #0a0b0fbb; backdrop-filter: blur(5px); }
 .modal.wide { width: min(650px, calc(100% - 32px)); }
+.difficulty-options { display: grid; gap: 10px; }
+.difficulty-option { display: grid; grid-template-columns: 28px minmax(0, 1fr) 18px; align-items: center; gap: 12px; width: 100%; padding: 16px; border: 1px solid #414247; border-radius: 8px; text-align: left; }
+.difficulty-option:hover:not(:disabled) { background: #2a2b30; border-color: #77787d; }
+.difficulty-option > svg:first-child { color: var(--accent); }
+.difficulty-option > span { min-width: 0; }
+.difficulty-option strong, .difficulty-option small { display: block; }
+.difficulty-option strong { font-size: 14px; }
+.difficulty-option small { margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.difficulty-option > svg:last-child { color: var(--muted); }
+.difficulty-loading { margin-top: 14px; color: var(--muted); font-size: 12px; }
+.preset-success-toast { position: fixed; z-index: 24; top: 91px; left: 50%; transform: translateX(-50%); max-width: min(520px, calc(100% - 28px)); padding: 12px 18px; border: 1px solid #98bd68; border-radius: 6px; background: #dff1c6; color: #24321a; box-shadow: 0 10px 35px #0007; font-size: 13px; font-weight: 800; text-align: center; }
 .modal > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 12px; }
 .modal > header h2 { font-size: 20px; font-weight: 550; letter-spacing: -.5px; }
 .entry-form { display: flex; flex-direction: column; gap: 20px; }

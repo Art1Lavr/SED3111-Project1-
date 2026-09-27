@@ -20,5 +20,6 @@ export default function Queue({ game, remaining, listenProgress }) {
         {index < game.players.length - 1 && <div className="listen-connector" title="Listening before the next turn"><Icon name="headphones" size={12} /><span><i style={{ width: `${index < game.current - 1 || (index === game.current - 1 && !listening) ? 100 : index === game.current - 1 && listening ? listenProgress * 100 : 0}%` }} /></span></div>}
       </div>
     })}</div>
+    {game.mode === 'beginner' && game.phase === 'edit' && <p className="beginner-turn-prompt">{game.players[game.current].name}: Add your melodic loop above the beat!</p>}
   </footer>
 }

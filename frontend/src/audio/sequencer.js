@@ -10,6 +10,10 @@ export function startSequence(engine, getTracks, bpm, { loop = true, startPositi
   let step = Math.ceil(startPosition / MIN_NOTE)
   let stopped = false
   let frame, timer
+  function trackCanSound(track, tracks) {
+    if (track.muted) return false
+    return !tracks.some((item) => item.solo) || track.solo
+  }
   function stop() {
     if (stopped) return
     stopped = true
@@ -26,8 +30,9 @@ export function startSequence(engine, getTracks, bpm, { loop = true, startPositi
       while (step * tickDuration < duration && startTime + step * tickDuration < current + 0.12) {
         const position = (step % ticksPerLoop) * MIN_NOTE
         const time = startTime + step * tickDuration
-        for (const track of getTracks()) {
-          if (track.muted) continue
+        const tracks = getTracks()
+        for (const track of tracks) {
+          if (!trackCanSound(track, tracks)) continue
           for (const note of track.notes.filter((note) => note.start === position)) {
             engine.schedule(track.instrumentId, track.sampleId, {
               time, channelId: track.id, volume: track.volume,

@@ -6,7 +6,7 @@ import { inScale, NOTE_NAMES } from '../game/harmony'
 import { transformSelection, duplicateSelection, copySelection, pasteNotes } from '../game/editing'
 
 const ROW = 17
-export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locked, playhead, playing, root = 0, scale = 'major', noteClipboard = [], onCopy }) {
+export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locked, playhead, playing, root = 0, scale = 'major', isBeginner = false, noteClipboard = [], onCopy }) {
   const grid = useRef(null)
   const gesture = useRef(null)
   const draftRef = useRef(null)
@@ -19,6 +19,9 @@ export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locke
   const shownNotes = draft ?? track.notes
   const quantize = (value) => Math.round(value / snap) * snap
   const erase = useRightErase(track.notes, onChange, locked)
+  const snapPitches = (notes, ids) => isBeginner
+    ? notes.map((note) => ids.includes(note.id) ? constrainNote(note, 'beginner') : note)
+    : notes
 
   useEffect(() => {
     function shortcut(event) {
@@ -59,7 +62,7 @@ export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locke
     }
     const dx = quantize((event.clientX - drag.x) / drag.stepWidth)
     const dy = -Math.round((event.clientY - drag.y) / ROW)
-    const next = transformSelection(track.notes, drag.ids, dx, dy, drag.resize)
+    const next = snapPitches(transformSelection(track.notes, drag.ids, dx, dy, drag.resize), drag.ids)
     draftRef.current = next; setDraft(next)
   }
   function commit() {
@@ -78,7 +81,7 @@ export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locke
   }
   function add(candidate) {
     if (locked) return
-    const note = constrainNote({ ...candidate, id: uid() })
+    const note = constrainNote({ ...candidate, id: uid() }, isBeginner ? 'beginner' : 'standard')
     onChange([...track.notes, note]); setSelected([note.id]); onPreview(note.pitch)
   }
   function copy() {
@@ -104,12 +107,13 @@ export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locke
     if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); event.stopPropagation(); remove(); return }
     const dx = event.key === 'ArrowRight' ? snap : event.key === 'ArrowLeft' ? -snap : 0
     const dy = event.key === 'ArrowUp' ? 1 : event.key === 'ArrowDown' ? -1 : 0
-    if (dx || dy) { event.preventDefault(); event.stopPropagation(); onChange(transformSelection(track.notes, selected, dx, dy, event.shiftKey && !!dx)) }
+    if (dx || dy) { event.preventDefault(); event.stopPropagation(); onChange(snapPitches(transformSelection(track.notes, selected, dx, dy, event.shiftKey && !!dx), selected)) }
   }
   const noteStyle = (note) => ({ left: `${note.start / STEPS * 100}%`, width: `calc(${note.length / STEPS * 100}% - 1px)`, top: (12 - note.pitch) * ROW + 1 })
 
-  return <div className="piano-editor" onKeyDown={handleKey} onContextMenu={(event) => event.preventDefault()}>
-    <div className="piano-toolbar">
+  return <div className={`piano-editor ${isBeginner ? 'beginner-piano-editor' : ''}`} onKeyDown={handleKey} onContextMenu={(event) => event.preventDefault()}>
+    <div className={`piano-toolbar ${isBeginner ? 'beginner-toolbar' : ''}`}>
+      {isBeginner ? <span className="beginner-lock-label">Pitch lock · C D E G A</span> : <>
       <label>Snap<select value={snap} onChange={(event) => setSnap(Number(event.target.value))}>{[[1, '1/8'], [0.5, '1/16'], [0.25, '1/32'], [0.125, '1/64']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Zoom<select value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>{[1, 1.5, 2, 3].map((value) => <option key={value} value={value}>{value * 100}%</option>)}</select></label>
       <span className="toolbar-divider" />
@@ -120,16 +124,19 @@ export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locke
       <button className="text-button" disabled={locked || !noteClipboard.length} onClick={paste} title="Ctrl+V / Cmd+V">Paste</button>
       <button className="text-button" disabled={locked || !selected.length} onClick={() => remove()}>Delete selected</button>
       <label className="polyphony-toggle"><input type="checkbox" checked={!track.cutSelf} disabled={locked} onChange={(event) => onCutSelf(!event.target.checked)} />Allow chords</label>
+      </>}
     </div>
-    <div className="guide-caption"><strong>{NOTE_NAMES[root]} {scale === 'minor' ? 'minor' : 'major'}</strong><span>Highlighted rows belong to your lobby key. The root note has a stronger marker.</span><span>{selected.length} selected</span></div>
-    <div className="guide-caption">{tool === 'draw' ? 'Click to draw. Ctrl + drag empty space to select a group.' : 'Drag empty space to select a group. Drag selected notes to move them together.'} Ctrl + click: toggle selection · Ctrl + C / V: copy / paste · Ctrl + D: duplicate · Delete: remove. Drag pasted notes to move the group. Enable Allow chords to hear simultaneous notes.</div>
+    {isBeginner
+      ? <div className="guide-caption beginner-guide"><strong>C major pentatonic</strong><span>Click a row to add a note. Drag to move it; pitches snap to C, D, E, G, or A.</span></div>
+      : <><div className="guide-caption"><strong>{NOTE_NAMES[root]} {scale === 'minor' ? 'minor' : 'major'}</strong><span>Highlighted rows belong to your lobby key. The root note has a stronger marker.</span><span>{selected.length} selected</span></div>
+        <div className="guide-caption">{tool === 'draw' ? 'Click to draw. Ctrl + drag empty space to select a group.' : 'Drag empty space to select a group. Drag selected notes to move them together.'} Ctrl + click: toggle selection · Ctrl + C / V: copy / paste · Ctrl + D: duplicate · Delete: remove. Drag pasted notes to move the group. Enable Allow chords to hear simultaneous notes.</div></>}
     <div className="piano-scroll">
       <div className="piano-canvas" style={{ minWidth: `${Math.max(768, 768 * zoom)}px`, width: `${zoom * 100}%` }}>
         <div className="piano-ruler"><span>KEY</span><div>{Array.from({ length: STEPS }, (_, i) => <span key={i}>{i % 2 === 0 ? `${Math.floor(i / 8) + 1}.${Math.floor(i % 8 / 2) + 1}` : '·'}</span>)}</div></div>
         <div className="piano-body">
           <div className="piano-keys">{PITCHES.map((pitch) => <button key={pitch} className={pitchName(pitch).includes('♯') ? 'black-key' : ''} onClick={() => onPreview(pitch)} aria-label={`Preview ${pitchName(pitch)}`}>{pitchName(pitch).includes('♯') ? '' : pitchName(pitch)}</button>)}</div>
           <div className={`note-grid ${locked ? 'locked-grid' : ''}`} ref={grid} tabIndex={0} onPointerMove={move} onPointerUp={commit} onPointerCancel={() => { gesture.current = null; draftRef.current = null; setDraft(null); setBox(null) }} style={{ height: PITCHES.length * ROW }}
-            aria-label="Piano roll. Click to add a note; drag to move; drag the right edge to resize."
+            aria-label={isBeginner ? 'C major pentatonic piano roll. Click to add a note; pitches snap to C, D, E, G, and A. Drag to move notes.' : 'Piano roll. Click to add a note; drag to move; drag the right edge to resize.'}
             onPointerDown={(event) => {
               if (locked || event.button !== 0 || event.target !== event.currentTarget) return
               event.currentTarget.focus()
@@ -145,7 +152,12 @@ export default function PianoRoll({ track, onChange, onPreview, onCutSelf, locke
               const pitch = PITCHES[Math.max(0, Math.min(24, Math.floor((event.clientY - rect.top) / ROW)))]
               add({ start, pitch, length: snap })
             }}>
-            {PITCHES.map((pitch, i) => <div key={pitch} className={`pitch-band ${pitchName(pitch).includes('♯') ? 'sharp' : ''} ${pitch % 12 === 0 ? 'octave' : ''} ${inScale(pitch, root, scale) ? 'in-scale' : ''} ${((pitch - root) % 12 + 12) % 12 === 0 ? 'root-note' : ''}`} style={{ top: i * ROW }} />)}
+            {PITCHES.map((pitch, i) => {
+              const pitchClass = (pitch % 12 + 12) % 12
+              const highlighted = isBeginner ? [0, 2, 4, 7, 9].includes(pitchClass) : inScale(pitch, root, scale)
+              const rootNote = isBeginner ? pitchClass === 0 : ((pitch - root) % 12 + 12) % 12 === 0
+              return <div key={pitch} className={`pitch-band ${pitchName(pitch).includes('♯') ? 'sharp' : ''} ${pitchClass === 0 ? 'octave' : ''} ${highlighted ? 'in-scale' : ''} ${rootNote ? 'root-note' : ''}`} style={{ top: i * ROW }} />
+            })}
             {Array.from({ length: STEPS / snap + 1 }, (_, i) => <div key={i} className={`beat-line ${i * snap % 2 === 0 ? 'strong' : ''} ${i * snap % 8 === 0 ? 'bar-line' : ''}`} style={{ left: `${i * snap / STEPS * 100}%` }} />)}
             {shownNotes.map((note) => <div key={note.id} role="button" tabIndex={0}
               aria-label={`${pitchName(note.pitch)}, position ${note.start + 1}, length ${note.length}. Arrow keys move; Shift and arrows resize; Delete removes.`}

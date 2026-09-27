@@ -5,7 +5,7 @@ import { createGame } from './model.js'
 
 test('Room settings retain a five-minute turn and a separate listening duration', () => {
   const room = normalizeRoom({ code: 'ABC234', players: [{ id: 'a', name: 'Alex' }, { id: 'b', name: 'Sam' }], bpm: 90, turnSeconds: 300, listenSeconds: 15 })
-  const game = createGame(room, 1000)
+  const game = createGame(room, {}, 1000)
   assert.equal(game.deadline, 301000)
   assert.equal(game.listenSeconds, 15)
   assert.equal(formatTime(300), '5:00')
@@ -21,4 +21,6 @@ test('Stored rooms validate players and migrate older settings', () => {
   assert.equal(room.bpm, 180)
   assert.equal(room.turnSeconds, 30)
   assert.equal(room.listenSeconds, 8)
+  assert.equal(room.turnSecondsCustom, false)
+  assert.equal(normalizeRoom({ ...room, turnSecondsCustom: true }).turnSecondsCustom, true)
 })
